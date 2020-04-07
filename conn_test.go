@@ -12,6 +12,7 @@ func TestConn(t *testing.T) {
 	impl := &testServer{
 		Send: [][]byte{
 			[]byte("hello"),
+			[]byte("bye"),
 		},
 	}
 
@@ -43,6 +44,12 @@ func TestConn(t *testing.T) {
 		require.NoError(err)
 		require.Equal(2, n)
 		require.Equal("lo", string(data[:n]))
+
+		// Read again next message
+		n, err = conn.Read(data)
+		require.NoError(err)
+		require.Equal(3, n)
+		require.Equal("bye", string(data[:n]))
 	})
 }
 
@@ -51,6 +58,7 @@ func TestConn_chunkedWrites(t *testing.T) {
 		Chunk: 3,
 		Send: [][]byte{
 			[]byte("hello"),
+			[]byte("bye"),
 		},
 	}
 
@@ -69,6 +77,11 @@ func TestConn_chunkedWrites(t *testing.T) {
 	require.NoError(err)
 	require.Equal(2, n)
 	require.Equal("lo", string(data[:n]))
+
+	n, err = conn.Read(data)
+	require.NoError(err)
+	require.Equal(3, n)
+	require.Equal("bye", string(data[:n]))
 }
 
 type testServer struct {
