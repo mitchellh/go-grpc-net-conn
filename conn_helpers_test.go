@@ -15,20 +15,16 @@ import (
 func testStreamConn(
 	stream grpc.Stream,
 ) *Conn {
+	dataFieldFunc := func(msg proto.Message) *[]byte {
+		return &msg.(*testproto.Bytes).Data
+	}
+
 	return &Conn{
 		Stream:   stream,
 		Request:  &testproto.Bytes{},
 		Response: &testproto.Bytes{},
-		Encode: func(m proto.Message, p []byte) (int, error) {
-			m.(*testproto.Bytes).Data = p
-			return len(p), nil
-		},
-
-		Decode: func(m proto.Message, offset int, p []byte) ([]byte, error) {
-			bs := m.(*testproto.Bytes).Data
-			copy(p, bs[offset:])
-			return bs, nil
-		},
+		Encode:   SimpleEncoder(dataFieldFunc),
+		Decode:   SimpleDecoder(dataFieldFunc),
 	}
 }
 

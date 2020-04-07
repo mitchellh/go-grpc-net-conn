@@ -12,6 +12,10 @@ import (
 // Conn implements net.Conn across a gRPC stream. You must populate many
 // of the exported structs on this field so please read the documentation.
 //
+// There are a number of limitations to this implementation, typically due
+// limitations of visibility given by the gRPC stream. Methods such as
+// LocalAddr, RemoteAddr, deadlines, etc. do not work.
+//
 // As documented on net.Conn, it is safe for concurrent read/write.
 type Conn struct {
 	// Stream is the stream to wrap into a Conn. This can be either a client
