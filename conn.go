@@ -21,14 +21,8 @@ type Conn struct {
 	Request  proto.Message
 	Response proto.Message
 
-	// Encode is given the Request value and expects you to encode the
-	// given byte slice into the message. You may use the slice directly.
-	//
-	// You do not have to encode the full byte slice in one packet. You can
-	// choose to chunk your packets by returning 0 < n < len(p) and the
-	// Conn will repeatedly send subsequent messages by slicing into the
-	// byte slice.
-	Encode func(proto.Message, []byte) (int, error)
+	// Encode encodes messages into the Request. See Encoder for more information.
+	Encode Encoder
 
 	// Decode is given a Response value and expects you to decode the
 	// response value into the byte slice given. You MUST decode up to
@@ -76,8 +70,29 @@ func (c *Conn) Read(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func (c *Conn) Write([]byte) (int, error) {
-	return 0, nil
+func (c *Conn) Write(p []byte) (int, error) {
+	total := len(p)
+	for {
+		// Encode our data into the request. Any error means we abort.
+		n, err := c.Encode(c.Request, p)
+		if err != nil {
+			return 0, err
+		}
+
+		// Send our message. Any error we also just abort out.
+		if err := c.Stream.SendMsg(c.Request); err != nil {
+			return 0, err
+		}
+
+		// If we sent the full amount of data, we're done. We respond with
+		// "total" in case we sent across multiple frames.
+		if n == len(p) {
+			return total, nil
+		}
+
+		// We sent partial data so we continue writing the remainder
+		p = p[n:]
+	}
 }
 
 func (c *Conn) Close() error {

@@ -13,7 +13,6 @@ import (
 )
 
 func testStreamConn(
-	t *testing.T,
 	stream grpc.Stream,
 ) *Conn {
 	return &Conn{
