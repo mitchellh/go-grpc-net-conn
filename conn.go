@@ -2,12 +2,17 @@ package grpc_net_conn
 
 import (
 	"net"
+	"sync"
 	"time"
 
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 )
 
+// Conn implements net.Conn across a gRPC stream. You must populate many
+// of the exported structs on this field so please read the documentation.
+//
+// As documented on net.Conn, it is safe for concurrent read/write.
 type Conn struct {
 	// Stream is the stream to wrap into a Conn. This can be either a client
 	// or server stream and we will perform correctly.
@@ -24,19 +29,19 @@ type Conn struct {
 	// Encode encodes messages into the Request. See Encoder for more information.
 	Encode Encoder
 
-	// Decode is given a Response value and expects you to decode the
-	// response value into the byte slice given. You MUST decode up to
-	// len(p) if available.
-	//
-	// This should return the data slice directly from m. The length of this
-	// is used to determine if there is more data and the offset for the next
-	// read.
-	Decode func(m proto.Message, offset int, p []byte) ([]byte, error)
+	// Decode decodes messages from the Response into a byte slice. See
+	// Decoder for more information.
+	Decode Decoder
 
-	readOffset int
+	readOffset          int
+	readLock, writeLock sync.Mutex
 }
 
+// Read implements io.Reader.
 func (c *Conn) Read(p []byte) (int, error) {
+	c.readLock.Lock()
+	defer c.readLock.Unlock()
+
 	// Attempt to read a value only if we're not still decoding a
 	// partial read value from the last result.
 	if c.readOffset == 0 {
@@ -70,7 +75,11 @@ func (c *Conn) Read(p []byte) (int, error) {
 	return len(p), nil
 }
 
+// Write implements io.Writer.
 func (c *Conn) Write(p []byte) (int, error) {
+	c.writeLock.Lock()
+	defer c.writeLock.Unlock()
+
 	total := len(p)
 	for {
 		// Encode our data into the request. Any error means we abort.
@@ -95,14 +104,38 @@ func (c *Conn) Write(p []byte) (int, error) {
 	}
 }
 
+// Close will close the client if this is a client. If this is a server
+// stream this does nothing since gRPC expects you to close the stream by
+// returning from the RPC call.
+//
+// This calls CloseSend underneath for clients, so read the documentation
+// for that to understand the semantics of this call.
 func (c *Conn) Close() error {
+	if cs, ok := c.Stream.(grpc.ClientStream); ok {
+		// We have to acquire the write lock since the gRPC docs state:
+		// "It is also not safe to call CloseSend concurrently with SendMsg."
+		c.writeLock.Lock()
+		defer c.writeLock.Unlock()
+		return cs.CloseSend()
+	}
+
 	return nil
 }
 
-func (c *Conn) LocalAddr() net.Addr              { return nil }
-func (c *Conn) RemoteAddr() net.Addr             { return nil }
-func (c *Conn) SetDeadline(time.Time) error      { return nil }
-func (c *Conn) SetReadDeadline(time.Time) error  { return nil }
+// LocalAddr returns nil.
+func (c *Conn) LocalAddr() net.Addr { return nil }
+
+// RemoteAddr returns nil.
+func (c *Conn) RemoteAddr() net.Addr { return nil }
+
+// SetDeadline is non-functional due to limitations on how gRPC works.
+// You can mimic deadlines often using call options.
+func (c *Conn) SetDeadline(time.Time) error { return nil }
+
+// SetReadDeadline is non-functional, see SetDeadline.
+func (c *Conn) SetReadDeadline(time.Time) error { return nil }
+
+// SetWriteDeadline is non-functional, see SetDeadline.
 func (c *Conn) SetWriteDeadline(time.Time) error { return nil }
 
 var _ net.Conn = (*Conn)(nil)
