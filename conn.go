@@ -23,10 +23,11 @@ type Conn struct {
 	Stream grpc.Stream
 
 	// Request is the request type to use for sending data and Response
-	// is the Response type.
+	// is the Response type. These must be non-nil allocated values and must
+	// NOT point to the same value (must be two separate allocations).
 	//
-	// Both are required. When set, these must be non-nil allocated values.
-	// These will be reused for each Read/Write operation.
+	// These values will be reused for reading and writing and so they should
+	// not be shared with any other logic.
 	Request  proto.Message
 	Response proto.Message
 
@@ -37,7 +38,13 @@ type Conn struct {
 	// Decoder for more information.
 	Decode Decoder
 
-	readOffset          int
+	// readOffset tracks where we've read up to if we're reading a result
+	// that didn't fully fit into the target slice. See Read.
+	readOffset int
+
+	// locks to ensure that only one reader/writer are operating at a time.
+	// Go documents the `net.Conn` interface as being safe for simultaneous
+	// readers/writers so we need to implement locking.
 	readLock, writeLock sync.Mutex
 }
 
