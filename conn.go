@@ -22,13 +22,21 @@ type Conn struct {
 	// or server stream and we will perform correctly.
 	Stream grpc.Stream
 
-	// Request is the request type to use for sending data and Response
-	// is the Response type. These must be non-nil allocated values and must
-	// NOT point to the same value (must be two separate allocations).
+	// Request is the type to use for sending request data to the streaming
+	// endpoint. This must be a non-nil allocated value and must NOT point to
+	// the same value as Response since they may be used concurrently.
 	//
-	// These values will be reused for reading and writing and so they should
-	// not be shared with any other logic.
-	Request  proto.Message
+	// The Reset method is never called on Request so you may set some
+	// fields on the request type and they will be sent for every request
+	// unless the Encode field changes it.
+	Request proto.Message
+
+	// Response is the type to use for reading response data. This must be
+	// a non-nil allocated value and must NOT point to the same value as Request
+	// since they may be used concurrently.
+	//
+	// The Reset method will be called on Response during Reads so data you
+	// set initially will be lost.
 	Response proto.Message
 
 	// Encode encodes messages into the Request. See Encoder for more information.
