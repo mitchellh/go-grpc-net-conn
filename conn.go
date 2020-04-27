@@ -39,6 +39,11 @@ type Conn struct {
 	// set initially will be lost.
 	Response proto.Message
 
+	// ResponseLock, if non-nil, will be locked while calling SendMsg
+	// on the Stream. This can be used to prevent concurrent access to
+	// SendMsg which is unsafe.
+	ResponseLock *sync.Mutex
+
 	// Encode encodes messages into the Request. See Encoder for more information.
 	Encode Encoder
 
@@ -107,8 +112,17 @@ func (c *Conn) Write(p []byte) (int, error) {
 			return 0, err
 		}
 
+		// We lock for SendMsg if we have a lock set.
+		if c.ResponseLock != nil {
+			c.ResponseLock.Lock()
+		}
+
 		// Send our message. Any error we also just abort out.
-		if err := c.Stream.SendMsg(c.Request); err != nil {
+		err = c.Stream.SendMsg(c.Request)
+		if c.ResponseLock != nil {
+			c.ResponseLock.Unlock()
+		}
+		if err != nil {
 			return 0, err
 		}
 
