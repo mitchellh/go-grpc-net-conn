@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 )
 
 // Conn implements net.Conn across a gRPC stream. You must populate many
@@ -88,7 +88,7 @@ func (c *Conn) Read(p []byte) (int, error) {
 
 		// Reset our response value for the next read and so that we
 		// don't potentially store a large response structure in memory.
-		c.Response.Reset()
+		proto.Reset(c.Response)
 
 		return n, err
 	}
